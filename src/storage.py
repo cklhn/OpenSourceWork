@@ -60,3 +60,47 @@ class Database:
                     FOREIGN KEY (project_id) REFERENCES projects(id)
                 )
             ''')
+
+            # 文件统计表
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS file_stats (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    project_id INTEGER NOT NULL,
+                    file_path TEXT NOT NULL,
+                    loc INTEGER DEFAULT 0,
+                    sloc INTEGER DEFAULT 0,
+                    functions_count INTEGER DEFAULT 0,
+                    classes_count INTEGER DEFAULT 0,
+                    imports_count INTEGER DEFAULT 0,
+                    code_smells TEXT,
+                    FOREIGN KEY (project_id) REFERENCES projects(id)
+                )
+            ''')
+
+    def save_project(self, name: str, url: str) -> int:
+        """保存项目"""
+        with self. get_conn() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT id FROM projects WHERE name = ?", (name,))
+            row = cursor.fetchone()
+            if row:
+                # 清除旧数据
+                cursor. execute("DELETE FROM commits WHERE project_id = ?", (row['id'],))
+                cursor.execute("DELETE FROM file_stats WHERE project_id = ?", (row['id'],))
+                return row['id']
+            cursor.execute("INSERT INTO projects (name, url) VALUES (?, ?)", (name, url))
+            return cursor.lastrowid
+
+    def save_commit(self, project_id: int, commit:  Dict):
+        """保存提交"""
+        with self.get_conn() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                INSERT INTO commits (project_id, sha, author, email, message,
+                                    committed_at, files_changed, insertions, deletions)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                project_id, commit['sha'], commit['author'], commit['email'],
+                commit['message'], commit['date']. isoformat(),
+                commit['files_changed'], commit['insertions'], commit['deletions']
+            ))
