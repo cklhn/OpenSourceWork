@@ -1,0 +1,223 @@
+<! DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OSS代码分析工具</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container { max-width: 1000px; margin: 0 auto; }
+        h1 { color: white; text-align: center; margin-bottom: 30px; }
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+        }
+        .card h2 {
+            color:  #333;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #667eea;
+        }
+        .project-item {
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            margin-bottom:  10px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        . project-item:hover {
+            transform: translateX(5px);
+            background: #e9ecef;
+        }
+        .project-name { font-weight: bold; font-size: 1.1em; }
+        .project-url { color: #666; font-size: 0.9em; }
+        .stats-grid {
+            display: grid;
+            grid-template-columns:  repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .stat-box {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 20px;
+            border-radius:  10px;
+            text-align: center;
+        }
+        .stat-value { font-size: 2em; font-weight: bold; }
+        . stat-label { opacity: 0.9; font-size: 0.9em; }
+        .btn {
+            background: #667eea;
+            color: white;
+            border:  none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        .btn:hover { background: #5a6fd6; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #eee; }
+        th { background: #f8f9fa; }
+        .smell-tag {
+            display: inline-block;
+            background: #ff6b6b;
+            color: white;
+            padding: 3px 8px;
+            border-radius: 4px;
+            margin:  2px;
+            font-size: 0.85em;
+        }
+        #project-detail { display: none; }
+        . empty { text-align: center; color:  #999; padding: 40px; }
+        .commit-item {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        .commit-sha {
+            font-family: monospace;
+            background: #f0f0f0;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size:  0.85em;
+        }
+        . commit-msg { margin-top: 5px; color: #333; }
+        .commit-meta { font-size: 0.85em; color: #666; margin-top: 3px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 OSS代码分析工具</h1>
+
+        <!-- 项目列表 -->
+        <div id="project-list" class="card">
+            <h2>📁 已分析的项目</h2>
+            {% if projects %}
+                {% for p in projects %}
+                <div class="project-item" onclick="showProject({{ p.id }})">
+                    <div class="project-name">{{ p.name }}</div>
+                    <div class="project-url">{{ p.url }}</div>
+                </div>
+                {% endfor %}
+            {% else %}
+            <div class="empty">
+                <p>暂无项目</p>
+                <p>运行 <code>python main.py analyze &lt;仓库地址&gt;</code> 开始分析</p>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- 项目详情 -->
+        <div id="project-detail">
+            <button class="btn" onclick="showList()" style="margin-bottom: 15px">← 返回列表</button>
+
+            <div class="card">
+                <h2 id="detail-title">项目详情</h2>
+                <div class="stats-grid" id="stats-grid"></div>
+            </div>
+
+            <div class="card">
+                <h2>👥 贡献者排名</h2>
+                <table id="contributors-table">
+                    <thead><tr><th>排名</th><th>贡献者</th><th>提交数</th><th>新增</th><th>删除</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+
+            <div class="card">
+                <h2>📝 最近提交</h2>
+                <div id="commits-list"></div>
+            </div>
+
+            <div class="card">
+                <h2>📄 文件统计 (按代码行数排序)</h2>
+                <table id="files-table">
+                    <thead><tr><th>文件</th><th>行数</th><th>函数</th><th>类</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+
+            <div class="card">
+                <h2>⚠️ 代码异味</h2>
+                <div id="smells-container"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function showProject(pid) {
+            document.getElementById('project-list').style.display = 'none';
+            document.getElementById('project-detail').style.display = 'block';
+
+            fetch(`/api/project/${pid}`)
+                .then(r => r.json())
+                .then(data => {
+                    const p = data.project;
+                    document.getElementById('detail-title').textContent = p.name;
+
+                    // 统计卡片
+                    document.getElementById('stats-grid').innerHTML = `
+                        <div class="stat-box"><div class="stat-value">${p.total_files}</div><div class="stat-label">Python文件</div></div>
+                        <div class="stat-box"><div class="stat-value">${p.total_loc}</div><div class="stat-label">代码行数</div></div>
+                        <div class="stat-box"><div class="stat-value">${p.total_functions}</div><div class="stat-label">函数数量</div></div>
+                        <div class="stat-box"><div class="stat-value">${p.total_classes}</div><div class="stat-label">类数量</div></div>
+                        <div class="stat-box"><div class="stat-value">${p.total_smells}</div><div class="stat-label">代码异味</div></div>
+                        <div class="stat-box"><div class="stat-value">${data.contributors.length}</div><div class="stat-label">贡献者</div></div>
+                    `;
+
+                    // 贡献者
+                    const ctbody = document.querySelector('#contributors-table tbody');
+                    ctbody.innerHTML = data.contributors.slice(0, 10).map((c, i) => `
+                        <tr>
+                            <td>${i + 1}</td>
+                            <td>${c. author}</td>
+                            <td>${c.commits}</td>
+                            <td style="color: green">+${c.additions || 0}</td>
+                            <td style="color:red">-${c.deletions || 0}</td>
+                        </tr>
+                    `).join('');
+
+                    // 最近提交
+                    document.getElementById('commits-list').innerHTML = data.recent_commits.map(c => `
+                        <div class="commit-item">
+                            <span class="commit-sha">${c.sha.substring(0, 7)}</span>
+                            <div class="commit-msg">${c.message. substring(0, 80)}</div>
+                            <div class="commit-meta">${c.author} · ${c.committed_at}</div>
+                        </div>
+                    `).join('') || '<div class="empty">暂无提交记录</div>';
+
+                    // 文件统计
+                    const ftbody = document.querySelector('#files-table tbody');
+                    ftbody.innerHTML = data.files.map(f => `
+                        <tr>
+                            <td>${f.file_path}</td>
+                            <td>${f.loc}</td>
+                            <td>${f.functions_count}</td>
+                            <td>${f.classes_count}</td>
+                        </tr>
+                    `).join('');
+
+                    // 代码异味
+                    const smellsHtml = data.smells.length > 0
+                        ? data.smells. map(s => `<span class="smell-tag">${s}</span>`).join('')
+                        : '<div class="empty">没有发现代码异味 👍</div>';
+                    document.getElementById('smells-container').innerHTML = smellsHtml;
+                });
+        }
+
+        function showList() {
+            document. getElementById('project-list').style.display = 'block';
+            document.getElementById('project-detail').style.display = 'none';
+        }
+    </script>
+</body>
+</html>
