@@ -72,3 +72,78 @@ def analyze_repository(repo_url: str, max_commits: int = 100):
         'total_classes': total_classes,
         'total_smells': len(all_smells)
     })
+      # 输出结果
+    print(f"{'='*50}")
+    print("分析结果")
+    print(f"{'='*50}")
+    print(f"Python文件数: {len(python_files)}")
+    print(f"总代码行数:  {total_loc}")
+    print(f"函数总数: {total_functions}")
+    print(f"类总数: {total_classes}")
+    print(f"代码异味数: {len(all_smells)}")
+
+    if all_smells:
+        print(f"\n代码异味详情 (前10个):")
+        for smell in all_smells[:10]:
+            print(f"  - {smell}")
+
+    # 贡献者统计
+    contributors = db.get_contributor_stats(project_id)
+    print(f"\n贡献者排名 (前5名):")
+    for i, c in enumerate(contributors[:5], 1):
+        print(f"  {i}. {c['author']}: {c['commits']} 次提交")
+
+    print(f"\n{'='*50}")
+    print("分析完成!  运行 'python main.py web' 查看Web界面")
+    print(f"{'='*50}")
+
+    db.close()
+
+
+def run_web(port: int = 5000):
+    """启动Web"""
+    from src.web_app import create_app
+    app = create_app("data/analysis.db")
+    print(f"启动Web:  http://127.0.0.1:{port}")
+    app.run(host="127.0.0.1", port=port, debug=True)
+
+
+def clear_data():
+    """清除数据"""
+    if os.path.exists("data/analysis.db"):
+        os.remove("data/analysis.db")
+        print("已清除数据库")
+    print("完成!")
+
+
+def main():
+    parser = argparse.ArgumentParser(description="OSS代码分析工具")
+    subparsers = parser.add_subparsers(dest="command")
+
+    # analyze命令
+    p1 = subparsers. add_parser("analyze", help="分析仓库")
+    p1.add_argument("repo_url", help="仓库URL或本地路径")
+    p1.add_argument("-n", "--max-commits", type=int, default=100, help="最大提交数")
+
+    # web命令
+    p2 = subparsers. add_parser("web", help="启动Web界面")
+    p2.add_argument("-p", "--port", type=int, default=5000, help="端口号")
+
+    # clear命令
+    subparsers.add_parser("clear", help="清除数据")
+
+    args = parser.parse_args()
+    os.makedirs("data/repos", exist_ok=True)
+
+    if args.command == "analyze":
+        analyze_repository(args.repo_url, args. max_commits)
+    elif args.command == "web":
+        run_web(args.port)
+    elif args.command == "clear":
+        clear_data()
+    else:
+        parser. print_help()
+
+
+if __name__ == "__main__":
+    main()
