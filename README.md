@@ -29,8 +29,8 @@
 
 1. **克隆仓库**
 ```bash
-git clone <[仓库地址](https://github.com/cklhn/OpenSourceWork)>
-cd oss-code-analyzer
+git clone https://github.com/cklhn/OpenSourceWork
+cd OpenSourceWork
 ```
 
 2. **安装依赖**
@@ -64,7 +64,7 @@ python main.py web
 ##  项目结构
 
 ```
-oss-code-analyzer/
+OpenSourceWork/
 ├── src/                    # 源代码
 │   ├── collector.py       # 数据收集器（Git操作）
 │   ├── analyzer.py        # 代码分析器
