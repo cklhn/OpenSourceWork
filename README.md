@@ -29,7 +29,7 @@
 
 1. **克隆仓库**
 ```bash
-git clone <仓库地址>
+git clone <[仓库地址](https://github.com/cklhn/OpenSourceWork)>
 cd oss-code-analyzer
 ```
 
