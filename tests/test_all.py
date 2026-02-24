@@ -1,6 +1,6 @@
 """
 单元测试
-运行:  pytest tests/test_Database.py -v
+运行:  pytest tests/test_all.py -v
 """
 import os
 import sys
@@ -9,7 +9,76 @@ import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from src.analyzer import CodeAnalyzer, CodeMetrics
 from src.storage import Database
+
+
+class TestCodeAnalyzer:
+    """代码分析器测试"""
+
+    def test_simple_function(self):
+        code = '''
+def hello(name):
+    return f"Hello, {name}!"
+'''
+        analyzer = CodeAnalyzer(code, "test. py")
+        metrics = analyzer. analyze()
+
+        assert metrics is not None
+        assert metrics.functions_count == 1
+        assert metrics.functions[0].name == "hello"
+
+    def test_class_analysis(self):
+        code = '''
+class MyClass:
+    def __init__(self):
+        self.value = 0
+    
+    def get_value(self):
+        return self.value
+'''
+        analyzer = CodeAnalyzer(code, "test.py")
+        metrics = analyzer.analyze()
+
+        assert metrics is not None
+        assert metrics.classes_count == 1
+        assert metrics.functions_count == 2
+
+    def test_complexity(self):
+        code = '''
+def complex_func(x):
+    if x > 0:
+        if x > 10:
+            return 1
+        else:
+            return 2
+    return 0
+'''
+        analyzer = CodeAnalyzer(code, "test.py")
+        metrics = analyzer.analyze()
+
+        assert metrics is not None
+        assert metrics.functions[0].complexity >= 3
+
+    def test_long_function_smell(self):
+        lines = ["def long_func():"]
+        for i in range(60):
+            lines.append(f"    x{i} = {i}")
+        lines.append("    return x0")
+        code = "\n".join(lines)
+
+        analyzer = CodeAnalyzer(code, "test.py")
+        metrics = analyzer.analyze()
+
+        assert metrics is not None
+        assert any("长函数" in s for s in metrics.code_smells)
+
+    def test_syntax_error(self):
+        code = "def broken("
+        analyzer = CodeAnalyzer(code, "test.py")
+        metrics = analyzer.analyze()
+        assert metrics is None
+
 
 class TestDatabase:
     """数据库测试"""
